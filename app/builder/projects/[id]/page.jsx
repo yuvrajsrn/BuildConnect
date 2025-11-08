@@ -106,6 +106,38 @@ export default function ProjectDetail() {
 
       if (rejectError) throw rejectError
 
+      // Send email notification to winning contractor
+      try {
+        await fetch('/api/emails/bid-accepted', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractorId: selectedBid.contractor_id,
+            projectId: params.id,
+            bidId: selectedBid.id
+          })
+        })
+      } catch (emailError) {
+        console.error('Failed to send acceptance email:', emailError)
+      }
+
+      // Send rejection emails to other contractors
+      const rejectedBids = bids.filter(b => b.id !== selectedBid.id && b.status === 'pending')
+      for (const bid of rejectedBids) {
+        try {
+          await fetch('/api/emails/bid-rejected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractorId: bid.contractor_id,
+              projectId: params.id
+            })
+          })
+        } catch (emailError) {
+          console.error('Failed to send rejection email:', emailError)
+        }
+      }
+
       alert('Bid accepted successfully!')
       setShowAcceptDialog(false)
       fetchProjectDetails()
@@ -121,12 +153,31 @@ export default function ProjectDetail() {
     if (!confirm('Are you sure you want to reject this bid?')) return
 
     try {
+      // Get the bid details first
+      const bidToReject = bids.find(b => b.id === bidId)
+
       const { error } = await supabase
         .from('bids')
         .update({ status: 'rejected' })
         .eq('id', bidId)
 
       if (error) throw error
+
+      // Send rejection email
+      if (bidToReject) {
+        try {
+          await fetch('/api/emails/bid-rejected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractorId: bidToReject.contractor_id,
+              projectId: params.id
+            })
+          })
+        } catch (emailError) {
+          console.error('Failed to send rejection email:', emailError)
+        }
+      }
 
       alert('Bid rejected')
       fetchProjectDetails()
