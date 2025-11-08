@@ -1,15 +1,18 @@
 import './globals.css'
+import { UserProvider } from '@/context/UserContext'
 
 export const metadata = {
-  title: 'Next.js MongoDB Template',
-  description: 'A simple template with App Router, MongoDB, and shadcn/ui',
+  title: 'BuildConnect - Construction Marketplace',
+  description: 'Connect builders with verified contractors through digital tenders',
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        {children}
+      <body className="antialiased">
+        <UserProvider>
+          {children}
+        </UserProvider>
       </body>
     </html>
   )
