@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ArrowLeft, MapPin, Calendar, DollarSign, Clock, User, Star, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, MapPin, Calendar, DollarSign, Clock, User, Star, CheckCircle, XCircle, Award } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/context/UserContext'
 import Link from 'next/link'
 import { format, formatDistanceToNow } from 'date-fns'
+import RatingModal from '@/components/RatingModal'
 
 export default function ProjectDetail() {
   const { user } = useUser()
@@ -25,6 +26,8 @@ export default function ProjectDetail() {
   const [selectedBid, setSelectedBid] = useState(null)
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showRatingModal, setShowRatingModal] = useState(false)
+  const [contractorToRate, setContractorToRate] = useState(null)
 
   useEffect(() => {
     if (user && params.id) {
@@ -58,14 +61,14 @@ export default function ProjectDetail() {
           // Get contractor profile
           const { data: contractorProfile } = await supabase
             .from('profiles')
-            .select('full_name, company_name, phone')
+            .select('full_name, company_name, phone, email')
             .eq('id', bid.contractor_id)
             .single()
 
-          // Get contractor data
+          // Get contractor data with ratings
           const { data: contractorData } = await supabase
             .from('contractors')
-            .select('specializations, experience_years, team_size, rating, total_projects')
+            .select('specializations, experience_years, team_size, average_rating, total_ratings, total_projects_completed')
             .eq('user_id', bid.contractor_id)
             .single()
 
@@ -331,7 +334,12 @@ export default function ProjectDetail() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <User className="h-5 w-5 text-gray-400" />
-                            <h3 className="text-lg font-semibold">{bid.contractor?.profiles?.company_name || 'Contractor'}</h3>
+                            <Link
+                              href={`/contractor/${bid.contractor_id}`}
+                              className="text-lg font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                            >
+                              {bid.contractor?.profiles?.company_name || 'Contractor'}
+                            </Link>
                             <Badge variant={bid.status === 'accepted' ? 'default' : bid.status === 'rejected' ? 'destructive' : 'secondary'}>
                               {bid.status}
                             </Badge>
@@ -339,13 +347,33 @@ export default function ProjectDetail() {
                           <div className="flex items-center gap-4 text-sm text-gray-600 ml-8">
                             <span className="flex items-center gap-1">
                               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              {bid.contractor?.rating || '0.0'}
+                              {bid.contractor?.average_rating?.toFixed(1) || '0.0'}
                             </span>
-                            <span>{bid.contractor?.total_projects || 0} projects</span>
+                            <span>{bid.contractor?.total_projects_completed || 0} projects</span>
                             <span>{bid.contractor?.experience_years || 0} years exp.</span>
                             <span>{bid.contractor?.team_size || 0} team size</span>
                           </div>
                         </div>
+                        {bid.status === 'accepted' && !project.is_rated && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setContractorToRate({
+                                ...bid.contractor,
+                                user_id: bid.contractor_id,
+                                email: bid.contractor?.profiles?.email || '',
+                                full_name: bid.contractor?.profiles?.full_name || '',
+                                company_name: bid.contractor?.profiles?.company_name || ''
+                              })
+                              setShowRatingModal(true)
+                            }}
+                            className="flex items-center gap-2 border-yellow-400 text-yellow-700 hover:bg-yellow-50"
+                          >
+                            <Award className="h-4 w-4" />
+                            Rate Contractor
+                          </Button>
+                        )}
                       </div>
 
                       <div className="grid md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
@@ -440,6 +468,21 @@ export default function ProjectDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Rating Modal */}
+        {showRatingModal && contractorToRate && (
+          <RatingModal
+            project={project}
+            contractor={contractorToRate}
+            onClose={() => {
+              setShowRatingModal(false)
+              setContractorToRate(null)
+            }}
+            onSuccess={() => {
+              fetchProjectDetails()
+            }}
+          />
+        )}
       </div>
     </DashboardLayout>
   )
