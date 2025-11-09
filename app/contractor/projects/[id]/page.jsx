@@ -102,7 +102,7 @@ export default function ContractorProjectDetail() {
         alert('Bid updated successfully!')
       } else {
         // Create new bid
-        const { error } = await supabase
+        const { data: insertedBid, error } = await supabase
           .from('bids')
           .insert([
             {
@@ -114,8 +114,27 @@ export default function ContractorProjectDetail() {
               status: 'pending'
             }
           ])
+          .select()
+          .single()
 
         if (error) throw error
+
+        // Send email notification to builder
+        try {
+          await fetch('/api/emails/bid-received', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              builderId: project.builder_id,
+              projectId: params.id,
+              bidId: insertedBid.id
+            })
+          })
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError)
+          // Don't fail the whole operation if email fails
+        }
+
         alert('Bid submitted successfully!')
       }
 
