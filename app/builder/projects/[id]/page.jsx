@@ -92,33 +92,32 @@ export default function ProjectDetail() {
 
     setActionLoading(true)
     try {
-      // Update bid status to accepted
-      const { error: bidError } = await supabase
-        .from('bids')
-        .update({ status: 'accepted' })
-        .eq('id', selectedBid.id)
+      console.log('Accepting bid:', selectedBid.id)
+      console.log('Project ID:', params.id)
+      console.log('Contractor ID:', selectedBid.contractor_id)
 
-      if (bidError) throw bidError
-
-      // Update project status and assign contractor
-      const { error: projectError } = await supabase
-        .from('projects')
-        .update({
-          status: 'awarded',
-          awarded_to: selectedBid.contractor_id
+      // Use the database function for atomic operation
+      const { data: result, error: functionError } = await supabase
+        .rpc('accept_bid', {
+          p_bid_id: selectedBid.id,
+          p_project_id: params.id
         })
-        .eq('id', params.id)
 
-      if (projectError) throw projectError
+      console.log('RPC Result:', result)
+      console.log('RPC Error:', functionError)
 
-      // Reject all other bids
-      const { error: rejectError } = await supabase
-        .from('bids')
-        .update({ status: 'rejected' })
-        .eq('project_id', params.id)
-        .neq('id', selectedBid.id)
+      if (functionError) {
+        console.error('Database function error:', functionError)
+        throw new Error(`Failed to accept bid: ${functionError.message}`)
+      }
 
-      if (rejectError) throw rejectError
+      // Check if the function returned an error in its response
+      if (result && result.success === false) {
+        console.error('Function returned error:', result.error)
+        throw new Error(result.error || 'Failed to accept bid')
+      }
+
+      console.log('Bid accepted successfully:', result)
 
       // Send email notification to winning contractor
       try {
