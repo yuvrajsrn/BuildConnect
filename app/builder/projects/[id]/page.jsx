@@ -55,12 +55,12 @@ export default function ProjectDetail() {
       if (projectError) throw projectError
       setProject(projectData)
 
-      // Fetch bids with contractor details
+      // Fetch bids with contractor details - sorted by price (lowest first)
       const { data: bidsData, error: bidsError } = await supabase
         .from('bids')
         .select('*')
         .eq('project_id', params.id)
-        .order('created_at', { ascending: false })
+        .order('quoted_price', { ascending: true })  // Sort by lowest price first
 
       if (bidsError) throw bidsError
 
@@ -395,7 +395,25 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4 stagger-animation">
+              <>
+                {/* Sorting Info Banner */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      <DollarSign className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-900">
+                        Bids sorted by price: Lowest to Highest
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Best value bids appear first to help you find competitive offers quickly
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 stagger-animation">
                 {bids.map((bid) => (
                   <Card
                     key={bid.id}
@@ -519,6 +537,7 @@ export default function ProjectDetail() {
                   </Card>
                 ))}
               </div>
+              </>
             )}
           </TabsContent>
         </Tabs>
