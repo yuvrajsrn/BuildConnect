@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Fix Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; margin-top: 0; }
+    .test-section {
+      margin: 20px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+      font-size: 14px;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .result {
+      margin: 10px 0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .success {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      color: #166534;
+    }
+    .error {
+      background: #fef2f2;
+      border-left: 4px solid #ef4444;
+      color: #991b1b;
+    }
+    .info {
+      background: #f0f9ff;
+      border-left: 4px solid #3b82f6;
+      color: #1e40af;
+    }
+    .warning {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      color: #92400e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Auth Fix Verification Test</h1>
+    <p>This test demonstrates the difference between <code>getSession()</code> and <code>getUser()</code></p>
+
+    <div class="test-section">
+      <h3>Test 1: Compare getSession() vs getUser()</h3>
+      <p>This shows why getUser() is better - it makes a fresh API call</p>
+      <button onclick="compareAuthMethods()">Run Comparison</button>
+      <div id="comparison-result"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 2: Simulate Stale Session</h3>
+      <p>Shows how getSession() can return stale data while getUser() catches it</p>
+      <button onclick="simulateStaleSession()">Simulate Stale Session</button>
+      <div id="stale-result"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Test 3: Check Current Auth State</h3>
+      <button onclick="checkAuthState()">Check Auth State</button>
+      <div id="auth-state"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>Instructions</h3>
+      <ol>
+        <li>Make sure you're logged into your app</li>
+        <li>Run Test 1 to see the difference between methods</li>
+        <li>Open DevTools Console to see detailed logs</li>
+        <li>The fix ensures we always use getUser() for fresh data</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    // You'll need to add your Supabase credentials here
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL'
+    const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY'
+
+    let supabase = null
+
+    function initSupabase() {
+      if (!supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      }
+      return supabase
+    }
+
+    function showResult(elementId, message, type = 'info') {
+      const element = document.getElementById(elementId)
+      element.innerHTML = `<div class="result ${type}">${message}</div>`
+    }
+
+    async function compareAuthMethods() {
+      const client = initSupabase()
+      if (!client) {
+        showResult('comparison-result', 'Please configure Supabase credentials in the script', 'error')
+        return
+      }
+
+      showResult('comparison-result', 'Running comparison...', 'info')
+
+      try {
+        // Test getSession()
+        const start1 = performance.now()
+        const { data: sessionData, error: sessionError } = await client.auth.getSession()
+        const time1 = (performance.now() - start1).toFixed(2)
+
+        // Test getUser()
+        const start2 = performance.now()
+        const { data: userData, error: userError } = await client.auth.getUser()
+        const time2 = (performance.now() - start2).toFixed(2)
+
+        let result = '<h4>Results:</h4>'
+        
+        result += `<div class="result info">
+          <strong>getSession()</strong><br>
+          Time: ${time1}ms (fast - uses cache)<br>
+          Has session: ${!!sessionData.session}<br>
+          ${sessionError ? `Error: ${sessionError.message}` : 'No error'}
+        </div>`
+
+        result += `<div class="result ${userError ? 'error' : 'success'}">
+          <strong>getUser()</strong><br>
+          Time: ${time2}ms (slower - fresh API call)<br>
+          Has user: ${!!userData.user}<br>
+          ${userError ? `Error: ${userError.message}` : 'Token is VALID ✓'}
+        </div>`
+
+        result += `<div class="result warning">
+          <strong>Key Difference:</strong><br>
+          • getSession() is ${time1}ms (cached, can be stale)<br>
+          • getUser() is ${time2}ms (fresh, always accurate)<br>
+          • The fix uses getUser() to avoid stale cache issues
+        </div>`
+
+        document.getElementById('comparison-result').innerHTML = result
+
+        console.log('getSession() result:', sessionData, sessionError)
+        console.log('getUser() result:', userData, userError)
+
+      } catch (err) {
+        showResult('comparison-result', `Error: ${err.message}`, 'error')
+        console.error(err)
+      }
+    }
+
+    async function simulateStaleSession() {
+      const client = initSupabase()
+      if (!client) {
+        showResult('stale-result', 'Please configure Supabase credentials in the script', 'error')
+        return
+      }
+
+      showResult('stale-result', 'Checking for stale session...', 'info')
+
+      try {
+        // Get both
+        const { data: sessionData } = await client.auth.getSession()
+        const { data: userData, error: userError } = await client.auth.getUser()
+
+        let result = '<h4>Stale Session Check:</h4>'
+
+        if (sessionData.session && userError) {
+          result += `<div class="result error">
+            <strong>⚠️ STALE SESSION DETECTED!</strong><br>
+            getSession() says: Logged in<br>
+            getUser() says: ${userError.message}<br>
+            <br>
+            This is the bug! The old code would get stuck here.
+          </div>`
+        } else if (sessionData.session && userData.user) {
+          result += `<div class="result success">
+            <strong>✓ Session is VALID</strong><br>
+            Both methods agree you're logged in<br>
+            Token is fresh and working
+          </div>`
+        } else {
+          result += `<div class="result info">
+            <strong>No session found</strong><br>
+            You're not logged in (which is fine)
+          </div>`
+        }
+
+        document.getElementById('stale-result').innerHTML = result
+
+      } catch (err) {
+        showResult('stale-result', `Error: ${err.message}`, 'error')
+      }
+    }
+
+    async function checkAuthState() {
+      const client = initSupabase()
+      if (!client) {
+        showResult('auth-state', 'Please configure Supabase credentials in the script', 'error')
+        return
+      }
+
+      showResult('auth-state', 'Checking auth state...', 'info')
+
+      try {
+        const { data: { user }, error } = await client.auth.getUser()
+
+        let result = '<h4>Current Auth State:</h4>'
+
+        if (error) {
+          result += `<div class="result error">
+            <strong>Auth Error:</strong> ${error.message}<br>
+            You should be redirected to login
+          </div>`
+        } else if (user) {
+          result += `<div class="result success">
+            <strong>✓ Authenticated</strong><br>
+            User ID: ${user.id}<br>
+            Email: ${user.email}<br>
+            User Type: ${user.user_metadata?.user_type || 'Not set'}
+          </div>`
+
+          // Check cookies
+          const cookies = document.cookie.split(';')
+            .filter(c => c.trim().startsWith('sb-'))
+            .map(c => c.trim().split('=')[0])
+
+          result += `<div class="result info">
+            <strong>Auth Cookies Found:</strong><br>
+            ${cookies.join('<br>') || 'None'}
+          </div>`
+        } else {
+          result += `<div class="result info">
+            <strong>Not Authenticated</strong><br>
+            No user session found
+          </div>`
+        }
+
+        document.getElementById('auth-state').innerHTML = result
+
+      } catch (err) {
+        showResult('auth-state', `Error: ${err.message}`, 'error')
+      }
+    }
+
+    // Auto-check on load
+    window.addEventListener('load', () => {
+      if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+        document.body.innerHTML = `
+          <div class="container">
+            <h1>⚠️ Configuration Required</h1>
+            <div class="result warning">
+              <p>Please edit this HTML file and add your Supabase credentials:</p>
+              <pre>const SUPABASE_URL = 'your-project-url'
+const SUPABASE_ANON_KEY = 'your-anon-key'</pre>
+              <p>You can find these in your .env.local file</p>
+            </div>
+          </div>
+        `
+      }
+    })
+  </script>
+</body>
+</html>

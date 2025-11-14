@@ -17,23 +17,15 @@ export function UserProvider({ children }) {
 
     const getUser = async () => {
       try {
-        // First try to get the session
-        const { data: { session }, error } = await supabase.auth.getSession()
+        // CRITICAL: Use getUser() instead of getSession() to avoid stale cache
+        // getUser() makes a fresh API call to verify the token is valid
+        const { data: { user }, error } = await supabase.auth.getUser()
         
         if (!mounted) return
 
         if (error) {
-          console.error('Session error:', error)
-          // Try to recover by refreshing the session
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-          if (!refreshError && refreshData?.session) {
-            console.log('Session recovered via refresh')
-            setUser(refreshData.session.user)
-            setUserRole(refreshData.session.user.user_metadata?.user_type)
-            setLoading(false)
-            return
-          }
-          // If refresh fails, clear everything
+          console.error('Auth error:', error)
+          // Clear everything on error
           setUser(null)
           setUserRole(null)
           setProfile(null)
@@ -41,15 +33,15 @@ export function UserProvider({ children }) {
           return
         }
         
-        if (session) {
-          setUser(session.user)
-          setUserRole(session.user.user_metadata?.user_type)
+        if (user) {
+          setUser(user)
+          setUserRole(user.user_metadata?.user_type)
           
           // Fetch profile data
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', session.user.id)
+            .eq('id', user.id)
             .single()
             
           if (!mounted) return

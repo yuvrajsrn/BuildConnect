@@ -54,24 +54,31 @@ export async function middleware(request) {
     }
   )
 
-  // Refresh session if expired - this is critical for maintaining auth state
-  const { data: { session }, error } = await supabase.auth.getSession()
+  // CRITICAL: Use getUser() instead of getSession() to avoid stale cache
+  // getUser() makes a fresh API call to verify the token is valid
+  const { data: { user }, error } = await supabase.auth.getUser()
   
-  // If there's an error getting the session, clear all auth cookies
+  // If there's an error getting the user, clear all auth cookies
   if (error) {
-    console.error('Session error in middleware:', error)
+    console.error('Auth error in middleware:', error)
     // Clear all possible Supabase auth cookies
+    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)/)?.[1]
     const cookiesToClear = [
       'sb-access-token',
       'sb-refresh-token', 
       'sb-auth-token',
-      'sb-auth-token.0',
-      'sb-auth-token.1'
+      `sb-${projectRef}-auth-token`,
+      `sb-${projectRef}-auth-token.0`,
+      `sb-${projectRef}-auth-token.1`,
     ]
     cookiesToClear.forEach(name => {
-      response.cookies.delete(name)
+      if (name) {
+        response.cookies.delete(name)
+      }
     })
   }
+  
+  const session = user ? { user } : null
 
   // Check for protected routes
   const builderPaths = ['/builder']

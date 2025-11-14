@@ -20,7 +20,8 @@ export default function SessionMonitor() {
 
     const checkAndRefreshSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        // CRITICAL: Use getUser() to verify token validity with fresh API call
+        const { data: { user }, error } = await supabase.auth.getUser()
         
         if (!mounted) return
 
@@ -28,9 +29,9 @@ export default function SessionMonitor() {
           console.error('Session check error:', error)
           errorCount++
           
-          // If we get 3 consecutive errors, try to recover
+          // If we get 3 consecutive errors, force sign out
           if (errorCount >= 3) {
-            console.log('Multiple session errors detected, attempting recovery...')
+            console.log('Multiple session errors detected, forcing sign out...')
             await supabase.auth.signOut()
             setSessionStatus('recovered')
             router.push('/login?session_expired=true')
@@ -44,33 +45,39 @@ export default function SessionMonitor() {
         // Reset error count on success
         errorCount = 0
 
-        if (!session) {
+        if (!user) {
           setSessionStatus('no-session')
           return
         }
 
-        const expiresAt = session.expires_at
-        const now = Math.floor(Date.now() / 1000)
-        const timeUntilExpiry = expiresAt - now
+        // Get session to check expiry
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          const expiresAt = session.expires_at
+          const now = Math.floor(Date.now() / 1000)
+          const timeUntilExpiry = expiresAt - now
 
-        // If session expires in less than 5 minutes, refresh it
-        if (timeUntilExpiry < 300 && timeUntilExpiry > 0) {
-          console.log('Session expiring soon, refreshing...')
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-          
-          if (refreshError) {
-            console.error('Failed to refresh session:', refreshError)
-            setSessionStatus('refresh-failed')
+          // If session expires in less than 5 minutes, refresh it
+          if (timeUntilExpiry < 300 && timeUntilExpiry > 0) {
+            console.log('Session expiring soon, refreshing...')
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+            
+            if (refreshError) {
+              console.error('Failed to refresh session:', refreshError)
+              setSessionStatus('refresh-failed')
+            } else {
+              console.log('Session refreshed successfully')
+              setSessionStatus('active')
+              router.refresh()
+            }
+          } else if (timeUntilExpiry <= 0) {
+            console.log('Session expired')
+            setSessionStatus('expired')
+            router.push('/login')
           } else {
-            console.log('Session refreshed successfully')
             setSessionStatus('active')
-            router.refresh()
           }
-        } else if (timeUntilExpiry <= 0) {
-          console.log('Session expired')
-          setSessionStatus('expired')
-          // Redirect to login
-          router.push('/login')
         } else {
           setSessionStatus('active')
         }
