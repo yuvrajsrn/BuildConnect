@@ -18,6 +18,7 @@ export default function BuilderDashboard() {
   const [projects, setProjects] = useState([])
   const [stats, setStats] = useState({ active: 0, bids: 0, completed: 0 })
   const [loadingData, setLoadingData] = useState(true)
+  const [error, setError] = useState(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -34,6 +35,8 @@ export default function BuilderDashboard() {
 
   const fetchData = async () => {
     try {
+      setError(null)
+
       // Fetch projects
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
@@ -42,23 +45,32 @@ export default function BuilderDashboard() {
         .order('created_at', { ascending: false })
         .limit(5)
 
-      if (projectsError) throw projectsError
+      if (projectsError) {
+        console.error('Error fetching projects:', projectsError)
+        throw new Error('Failed to load projects. Please check your connection and try again.')
+      }
 
       setProjects(projectsData || [])
 
       // Calculate stats
-      const { data: allProjects } = await supabase
+      const { data: allProjects, error: statsError } = await supabase
         .from('projects')
         .select('status, bids(id)')
         .eq('builder_id', user.id)
 
-      const active = allProjects?.filter(p => p.status === 'open').length || 0
-      const completed = allProjects?.filter(p => p.status === 'completed').length || 0
-      const totalBids = allProjects?.reduce((sum, p) => sum + (p.bids?.length || 0), 0) || 0
+      if (statsError) {
+        console.error('Error fetching stats:', statsError)
+        // Don't throw - stats are not critical, just log the error
+      } else {
+        const active = allProjects?.filter(p => p.status === 'open').length || 0
+        const completed = allProjects?.filter(p => p.status === 'completed').length || 0
+        const totalBids = allProjects?.reduce((sum, p) => sum + (p.bids?.length || 0), 0) || 0
 
-      setStats({ active, bids: totalBids, completed })
+        setStats({ active, bids: totalBids, completed })
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
+      setError(error.message || 'An error occurred while loading the dashboard')
     } finally {
       setLoadingData(false)
     }
@@ -69,6 +81,20 @@ export default function BuilderDashboard() {
       <DashboardLayout role="builder">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout role="builder">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <div className="text-red-600 text-center">
+            <p className="text-lg font-semibold">Error Loading Dashboard</p>
+            <p className="text-sm mt-2">{error}</p>
+          </div>
+          <Button onClick={() => fetchData()}>Try Again</Button>
         </div>
       </DashboardLayout>
     )
