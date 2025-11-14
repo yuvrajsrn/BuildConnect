@@ -57,11 +57,20 @@ export async function middleware(request) {
   // Refresh session if expired - this is critical for maintaining auth state
   const { data: { session }, error } = await supabase.auth.getSession()
   
-  // If there's an error getting the session, clear cookies
+  // If there's an error getting the session, clear all auth cookies
   if (error) {
     console.error('Session error in middleware:', error)
-    response.cookies.delete('sb-access-token')
-    response.cookies.delete('sb-refresh-token')
+    // Clear all possible Supabase auth cookies
+    const cookiesToClear = [
+      'sb-access-token',
+      'sb-refresh-token', 
+      'sb-auth-token',
+      'sb-auth-token.0',
+      'sb-auth-token.1'
+    ]
+    cookiesToClear.forEach(name => {
+      response.cookies.delete(name)
+    })
   }
 
   // Check for protected routes

@@ -24,6 +24,16 @@ export function UserProvider({ children }) {
 
         if (error) {
           console.error('Session error:', error)
+          // Try to recover by refreshing the session
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+          if (!refreshError && refreshData?.session) {
+            console.log('Session recovered via refresh')
+            setUser(refreshData.session.user)
+            setUserRole(refreshData.session.user.user_metadata?.user_type)
+            setLoading(false)
+            return
+          }
+          // If refresh fails, clear everything
           setUser(null)
           setUserRole(null)
           setProfile(null)

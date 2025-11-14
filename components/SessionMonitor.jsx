@@ -16,6 +16,7 @@ export default function SessionMonitor() {
   useEffect(() => {
     let mounted = true
     let refreshInterval
+    let errorCount = 0
 
     const checkAndRefreshSession = async () => {
       try {
@@ -25,9 +26,23 @@ export default function SessionMonitor() {
 
         if (error) {
           console.error('Session check error:', error)
+          errorCount++
+          
+          // If we get 3 consecutive errors, try to recover
+          if (errorCount >= 3) {
+            console.log('Multiple session errors detected, attempting recovery...')
+            await supabase.auth.signOut()
+            setSessionStatus('recovered')
+            router.push('/login?session_expired=true')
+            return
+          }
+          
           setSessionStatus('error')
           return
         }
+        
+        // Reset error count on success
+        errorCount = 0
 
         if (!session) {
           setSessionStatus('no-session')
