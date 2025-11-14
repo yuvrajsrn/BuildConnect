@@ -18,6 +18,7 @@ export default function ContractorDashboard() {
   const [stats, setStats] = useState({ totalBids: 0, accepted: 0, rating: 0 })
   const [recentProjects, setRecentProjects] = useState([])
   const [loadingData, setLoadingData] = useState(true)
+  const [error, setError] = useState(null)
   const [selectedLocation, setSelectedLocation] = useState('all')
   const [availableLocations, setAvailableLocations] = useState([])
   const supabase = createClient()
@@ -36,18 +37,28 @@ export default function ContractorDashboard() {
 
   const fetchData = async () => {
     try {
+      setError(null)
+
       // Get contractor profile
-      const { data: contractorData } = await supabase
+      const { data: contractorData, error: contractorError } = await supabase
         .from('contractors')
         .select('*')
         .eq('user_id', user.id)
         .single()
 
+      if (contractorError) {
+        console.error('Error fetching contractor profile:', contractorError)
+      }
+
       // Get bids stats
-      const { data: bidsData } = await supabase
+      const { data: bidsData, error: bidsError } = await supabase
         .from('bids')
         .select('status')
         .eq('contractor_id', user.id)
+
+      if (bidsError) {
+        console.error('Error fetching bids:', bidsError)
+      }
 
       const totalBids = bidsData?.length || 0
       const accepted = bidsData?.filter(b => b.status === 'accepted').length || 0
@@ -56,12 +67,17 @@ export default function ContractorDashboard() {
       setStats({ totalBids, accepted, rating })
 
       // Get recent open projects matching contractor's locations
-      const { data: projectsData } = await supabase
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*, bids!left(id, contractor_id)')
         .eq('status', 'open')
         .order('created_at', { ascending: false })
         .limit(20)
+
+      if (projectsError) {
+        console.error('Error fetching projects:', projectsError)
+        throw new Error('Failed to load projects. Please check your connection and try again.')
+      }
 
       setRecentProjects(projectsData || [])
 
@@ -84,6 +100,7 @@ export default function ContractorDashboard() {
       }
     } catch (error) {
       console.error('Error fetching data:', error)
+      setError(error.message || 'An error occurred while loading the dashboard')
     } finally {
       setLoadingData(false)
     }
@@ -94,6 +111,20 @@ export default function ContractorDashboard() {
       <DashboardLayout role="contractor">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout role="contractor">
+        <div className="flex flex-col items-center justify-center h-64 space-y-4">
+          <div className="text-red-600 text-center">
+            <p className="text-lg font-semibold">Error Loading Dashboard</p>
+            <p className="text-sm mt-2">{error}</p>
+          </div>
+          <Button onClick={() => fetchData()}>Try Again</Button>
         </div>
       </DashboardLayout>
     )

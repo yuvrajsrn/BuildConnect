@@ -54,16 +54,14 @@ export async function middleware(request) {
     }
   )
 
-  // Refresh session if expired
-  await supabase.auth.getSession()
-
   // Check for protected routes
   const builderPaths = ['/builder']
   const contractorPaths = ['/contractor']
   const isBuilderPath = builderPaths.some(path => request.nextUrl.pathname.startsWith(path))
   const isContractorPath = contractorPaths.some(path => request.nextUrl.pathname.startsWith(path))
-  
+
   if (isBuilderPath || isContractorPath) {
+    // Get session (this also refreshes it if needed)
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {
