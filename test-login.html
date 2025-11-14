@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Login Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Login Test</h1>
+    <form id="loginForm">
+        <input type="email" id="email" placeholder="Email" required><br><br>
+        <input type="password" id="password" placeholder="Password" required><br><br>
+        <button type="submit">Login</button>
+    </form>
+    <div id="result"></div>
+
+    <script>
+        const supabaseUrl = 'https://nzwbnivycuyhujdpmtgo.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56d2JuaXZ5Y3V5aHVqZHBtdGdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4ODc3NjIsImV4cCI6MjA3ODQ2Mzc2Mn0.XGb4Crn6yvZOfYUqCjGjVGLSKqURj3k4FtGAeKJx6aM'
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey)
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault()
+            const email = document.getElementById('email').value
+            const password = document.getElementById('password').value
+            const resultDiv = document.getElementById('result')
+
+            resultDiv.innerHTML = '<p>Logging in...</p>'
+
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                })
+
+                if (error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`
+                    console.error('Login error:', error)
+                } else {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">Login successful!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `
+                    console.log('Login data:', data)
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `<p style="color: red;">Exception: ${err.message}</p>`
+                console.error('Exception:', err)
+            }
+        })
+    </script>
+</body>
+</html>

@@ -57,13 +57,17 @@ export default function SignInForm() {
       // Redirect based on role
       console.log('Redirecting to:', userType === 'builder' ? '/builder/dashboard' : '/contractor/dashboard')
 
+      // Use router.push for proper Next.js navigation
       if (userType === 'builder') {
-        window.location.href = '/builder/dashboard'
+        router.push('/builder/dashboard')
       } else if (userType === 'contractor') {
-        window.location.href = '/contractor/dashboard'
+        router.push('/contractor/dashboard')
       } else {
-        window.location.href = '/'
+        router.push('/')
       }
+      
+      // Force a refresh to ensure middleware picks up the session
+      router.refresh()
     } catch (error) {
       console.error('Login error:', error)
       setError(error.message || 'An error occurred during sign in')
