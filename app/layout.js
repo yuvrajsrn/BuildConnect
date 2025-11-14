@@ -1,5 +1,6 @@
 import './globals.css'
 import { UserProvider } from '@/context/UserContext'
+import SessionMonitor from '@/components/SessionMonitor'
 
 export const metadata = {
   title: 'BuildConnect - Construction Marketplace',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className="antialiased">
         <UserProvider>
+          <SessionMonitor />
           {children}
         </UserProvider>
       </body>

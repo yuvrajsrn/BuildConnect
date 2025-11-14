@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Test - BuildConnect</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background: #f3f4f6;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        pre {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .session-info {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 BuildConnect Session Test</h1>
+        
+        <div class="form-group">
+            <label>Supabase URL:</label>
+            <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co">
+        </div>
+        
+        <div class="form-group">
+            <label>Supabase Anon Key:</label>
+            <input type="text" id="supabaseKey" placeholder="Your anon key">
+        </div>
+        
+        <div class="form-group">
+            <label>Email:</label>
+            <input type="email" id="email" placeholder="user@example.com">
+        </div>
+        
+        <div class="form-group">
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="••••••••">
+        </div>
+        
+        <div>
+            <button onclick="testLogin()">Test Login</button>
+            <button onclick="checkSession()">Check Session</button>
+            <button onclick="refreshSession()">Refresh Session</button>
+            <button onclick="testLogout()">Test Logout</button>
+            <button onclick="clearAll()">Clear All Data</button>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div class="session-info">
+            <h3>Session Information:</h3>
+            <pre id="sessionInfo">No session data yet. Click "Check Session" after logging in.</pre>
+        </div>
+        
+        <div class="session-info">
+            <h3>Console Logs:</h3>
+            <pre id="logs"></pre>
+        </div>
+    </div>
+
+    <script>
+        let supabase = null;
+        let logs = [];
+
+        function log(message, data = null) {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${message}`;
+            logs.push(logEntry);
+            if (data) {
+                logs.push(JSON.stringify(data, null, 2));
+            }
+            document.getElementById('logs').textContent = logs.slice(-20).join('\n');
+            console.log(message, data);
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            log(message);
+        }
+
+        function initSupabase() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+            
+            if (!url || !key) {
+                showStatus('Please enter Supabase URL and Key', 'error');
+                return false;
+            }
+            
+            supabase = window.supabase.createClient(url, key, {
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true,
+                    flowType: 'pkce',
+                    storage: window.localStorage
+                }
+            });
+            
+            // Listen for auth state changes
+            supabase.auth.onAuthStateChange((event, session) => {
+                log(`Auth state changed: ${event}`, { userId: session?.user?.id });
+                if (session) {
+                    displaySessionInfo(session);
+                }
+            });
+            
+            return true;
+        }
+
+        async function testLogin() {
+            if (!initSupabase()) return;
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                showStatus('Please enter email and password', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Logging in...', 'info');
+                log('Attempting login', { email });
+                
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                
+                if (error) throw error;
+                
+                showStatus('✅ Login successful!', 'success');
+                log('Login successful', {
+                    userId: data.user.id,
+                    email: data.user.email,
+                    userType: data.user.user_metadata?.user_type
+                });
+                
+                displaySessionInfo(data.session);
+            } catch (error) {
+                showStatus(`❌ Login failed: ${error.message}`, 'error');
+                log('Login error', error);
+            }
+        }
+
+        async function checkSession() {
+            if (!supabase) {
+                if (!initSupabase()) return;
+            }
+            
+            try {
+                showStatus('Checking session...', 'info');
+                log('Checking session');
+                
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) throw error;
+                
+                if (!session) {
+                    showStatus('No active session found', 'error');
+                    log('No session');
+                    document.getElementById('sessionInfo').textContent = 'No active session';
+                    return;
+                }
+                
+                const expiresAt = session.expires_at;
+                const now = Math.floor(Date.now() / 1000);
+                const timeUntilExpiry = expiresAt - now;
+                const isExpired = timeUntilExpiry < 0;
+                
+                if (isExpired) {
+                    showStatus('⚠️ Session is expired!', 'error');
+                } else if (timeUntilExpiry < 300) {
+                    showStatus(`⚠️ Session expiring soon (${Math.floor(timeUntilExpiry / 60)} minutes)`, 'error');
+                } else {
+                    showStatus(`✅ Session is active (${Math.floor(timeUntilExpiry / 60)} minutes remaining)`, 'success');
+                }
+                
+                log('Session check complete', {
+                    isExpired,
+                    timeUntilExpiry: `${Math.floor(timeUntilExpiry / 60)} minutes`
+                });
+                
+                displaySessionInfo(session);
+            } catch (error) {
+                showStatus(`❌ Error checking session: ${error.message}`, 'error');
+                log('Session check error', error);
+            }
+        }
+
+        async function refreshSession() {
+            if (!supabase) {
+                if (!initSupabase()) return;
+            }
+            
+            try {
+                showStatus('Refreshing session...', 'info');
+                log('Attempting session refresh');
+                
+                const { data: { session }, error } = await supabase.auth.refreshSession();
+                
+                if (error) throw error;
+                
+                showStatus('✅ Session refreshed successfully!', 'success');
+                log('Session refreshed', { userId: session.user.id });
+                
+                displaySessionInfo(session);
+            } catch (error) {
+                showStatus(`❌ Refresh failed: ${error.message}`, 'error');
+                log('Refresh error', error);
+            }
+        }
+
+        async function testLogout() {
+            if (!supabase) {
+                if (!initSupabase()) return;
+            }
+            
+            try {
+                showStatus('Logging out...', 'info');
+                log('Attempting logout');
+                
+                const { error } = await supabase.auth.signOut();
+                
+                if (error) throw error;
+                
+                showStatus('✅ Logged out successfully!', 'success');
+                log('Logout successful');
+                
+                document.getElementById('sessionInfo').textContent = 'No active session';
+            } catch (error) {
+                showStatus(`❌ Logout failed: ${error.message}`, 'error');
+                log('Logout error', error);
+            }
+        }
+
+        function clearAll() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.cookie.split(";").forEach(c => {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+            logs = [];
+            document.getElementById('logs').textContent = '';
+            document.getElementById('sessionInfo').textContent = 'All data cleared';
+            showStatus('✅ All cookies, localStorage, and sessionStorage cleared', 'success');
+            log('All data cleared');
+        }
+
+        function displaySessionInfo(session) {
+            if (!session) {
+                document.getElementById('sessionInfo').textContent = 'No session data';
+                return;
+            }
+            
+            const expiresAt = session.expires_at;
+            const now = Math.floor(Date.now() / 1000);
+            const timeUntilExpiry = expiresAt - now;
+            
+            const info = {
+                userId: session.user.id,
+                email: session.user.email,
+                userType: session.user.user_metadata?.user_type,
+                expiresAt: new Date(expiresAt * 1000).toISOString(),
+                timeUntilExpiry: `${Math.floor(timeUntilExpiry / 60)} minutes`,
+                isExpired: timeUntilExpiry < 0,
+                accessToken: session.access_token.substring(0, 20) + '...',
+                refreshToken: session.refresh_token.substring(0, 20) + '...'
+            };
+            
+            document.getElementById('sessionInfo').textContent = JSON.stringify(info, null, 2);
+        }
+
+        // Auto-check session every 30 seconds
+        setInterval(() => {
+            if (supabase) {
+                checkSession();
+            }
+        }, 30000);
+
+        log('Session test page loaded');
+    </script>
+</body>
+</html>

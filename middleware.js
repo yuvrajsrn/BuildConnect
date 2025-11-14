@@ -54,8 +54,15 @@ export async function middleware(request) {
     }
   )
 
-  // Refresh session if expired
-  await supabase.auth.getSession()
+  // Refresh session if expired - this is critical for maintaining auth state
+  const { data: { session }, error } = await supabase.auth.getSession()
+  
+  // If there's an error getting the session, clear cookies
+  if (error) {
+    console.error('Session error in middleware:', error)
+    response.cookies.delete('sb-access-token')
+    response.cookies.delete('sb-refresh-token')
+  }
 
   // Check for protected routes
   const builderPaths = ['/builder']
@@ -64,8 +71,6 @@ export async function middleware(request) {
   const isContractorPath = contractorPaths.some(path => request.nextUrl.pathname.startsWith(path))
   
   if (isBuilderPath || isContractorPath) {
-    const { data: { session } } = await supabase.auth.getSession()
-    
     if (!session) {
       return NextResponse.redirect(new URL('/login', request.url))
     }

@@ -13,44 +13,40 @@ export function UserProvider({ children }) {
   const supabase = createClient()
 
   useEffect(() => {
+    let mounted = true
+
     const getUser = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (session) {
-        setUser(session.user)
-        setUserRole(session.user.user_metadata?.user_type)
+      try {
+        // First try to get the session
+        const { data: { session }, error } = await supabase.auth.getSession()
         
-        // Fetch profile data
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-          
-        if (profileData) {
-          setProfile(profileData)
+        if (!mounted) return
+
+        if (error) {
+          console.error('Session error:', error)
+          setUser(null)
+          setUserRole(null)
+          setProfile(null)
+          setLoading(false)
+          return
         }
-      }
-      
-      setLoading(false)
-    }
-
-    getUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+        
         if (session) {
           setUser(session.user)
           setUserRole(session.user.user_metadata?.user_type)
           
           // Fetch profile data
-          const { data: profileData } = await supabase
+          const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
             
-          if (profileData) {
+          if (!mounted) return
+
+          if (profileError) {
+            console.error('Profile fetch error:', profileError)
+          } else if (profileData) {
             setProfile(profileData)
           }
         } else {
@@ -58,11 +54,72 @@ export function UserProvider({ children }) {
           setUserRole(null)
           setProfile(null)
         }
-        setLoading(false)
+      } catch (err) {
+        console.error('Unexpected error in getUser:', err)
+        if (mounted) {
+          setUser(null)
+          setUserRole(null)
+          setProfile(null)
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    getUser()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id)
+
+        if (!mounted) return
+
+        if (event === 'SIGNED_OUT' || !session) {
+          setUser(null)
+          setUserRole(null)
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully')
+        }
+
+        if (session) {
+          setUser(session.user)
+          setUserRole(session.user.user_metadata?.user_type)
+          
+          // Fetch profile data
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single()
+              
+            if (!mounted) return
+
+            if (profileError) {
+              console.error('Profile fetch error:', profileError)
+            } else if (profileData) {
+              setProfile(profileData)
+            }
+          } catch (err) {
+            console.error('Error fetching profile:', err)
+          }
+        }
+        
+        if (mounted) {
+          setLoading(false)
+        }
       }
     )
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
     }
   }, [])

@@ -88,70 +88,122 @@ export default function ContractorProjectDetail() {
 
   const handleSubmitBid = async (e) => {
     e.preventDefault()
+    
+    console.log('Form submitted, user:', user)
+    
     setSubmitting(true)
     setError(null)
 
     try {
+      // Check if user is authenticated
+      if (!user || !user.id) {
+        throw new Error('You must be logged in to submit a bid')
+      }
+
+      // Check if Supabase client is initialized
+      if (!supabase) {
+        throw new Error('Database connection not initialized')
+      }
+
       // Validation
-      if (parseInt(bidData.quoted_price) < project.budget_min || parseInt(bidData.quoted_price) > project.budget_max) {
+      const quotedPrice = parseInt(bidData.quoted_price)
+      const estimatedDuration = parseInt(bidData.estimated_duration)
+
+      if (isNaN(quotedPrice) || quotedPrice <= 0) {
+        throw new Error('Please enter a valid quoted price')
+      }
+
+      if (isNaN(estimatedDuration) || estimatedDuration <= 0) {
+        throw new Error('Please enter a valid estimated duration')
+      }
+
+      if (quotedPrice < project.budget_min || quotedPrice > project.budget_max) {
         throw new Error(`Quoted price should be between ₹${project.budget_min?.toLocaleString()} and ₹${project.budget_max?.toLocaleString()}`)
       }
 
+      if (!bidData.proposal || bidData.proposal.trim().length < 100) {
+        throw new Error('Proposal must be at least 100 characters long')
+      }
+
+      console.log('Submitting bid with data:', {
+        project_id: params.id,
+        contractor_id: user.id,
+        quoted_price: quotedPrice,
+        estimated_duration: estimatedDuration,
+        proposal_length: bidData.proposal.trim().length
+      })
+
+      // Verify session before submitting
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError)
+        throw new Error('Your session has expired. Please log in again.')
+      }
+
+      console.log('Session verified, user ID:', session.user.id)
+
       if (existingBid) {
         // Update existing bid
-        const { error } = await supabase
+        const { error: updateError } = await supabase
           .from('bids')
           .update({
-            quoted_price: parseInt(bidData.quoted_price),
-            estimated_duration: parseInt(bidData.estimated_duration),
-            proposal: bidData.proposal
+            quoted_price: quotedPrice,
+            estimated_duration: estimatedDuration,
+            proposal: bidData.proposal.trim()
           })
           .eq('id', existingBid.id)
 
-        if (error) throw error
+        if (updateError) {
+          console.error('Update error:', updateError)
+          throw new Error(updateError.message || 'Failed to update bid')
+        }
+
         alert('Bid updated successfully!')
+        router.push('/contractor/bids')
       } else {
         // Create new bid
-        const { data: insertedBid, error } = await supabase
+        const { data: insertedBid, error: insertError } = await supabase
           .from('bids')
           .insert([
             {
               project_id: params.id,
               contractor_id: user.id,
-              quoted_price: parseInt(bidData.quoted_price),
-              estimated_duration: parseInt(bidData.estimated_duration),
-              proposal: bidData.proposal,
+              quoted_price: quotedPrice,
+              estimated_duration: estimatedDuration,
+              proposal: bidData.proposal.trim(),
               status: 'pending'
             }
           ])
           .select()
           .single()
 
-        if (error) throw error
-
-        // Send email notification to builder
-        try {
-          await fetch('/api/emails/bid-received', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              builderId: project.builder_id,
-              projectId: params.id,
-              bidId: insertedBid.id
-            })
-          })
-        } catch (emailError) {
-          console.error('Failed to send email notification:', emailError)
-          // Don't fail the whole operation if email fails
+        if (insertError) {
+          console.error('Insert error:', insertError)
+          throw new Error(insertError.message || 'Failed to submit bid')
         }
 
-        alert('Bid submitted successfully!')
-      }
+        console.log('Bid inserted successfully:', insertedBid)
 
-      router.push('/contractor/bids')
+        // Send email notification to builder (don't wait for it)
+        fetch('/api/emails/bid-received', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            builderId: project.builder_id,
+            projectId: params.id,
+            bidId: insertedBid.id
+          })
+        }).catch(emailError => {
+          console.error('Failed to send email notification:', emailError)
+          // Don't fail the whole operation if email fails
+        })
+
+        alert('Bid submitted successfully!')
+        router.push('/contractor/bids')
+      }
     } catch (error) {
-      setError(error.message)
-    } finally {
+      console.error('Bid submission error:', error)
+      setError(error.message || 'An unexpected error occurred')
       setSubmitting(false)
     }
   }
@@ -338,7 +390,7 @@ export default function ContractorProjectDetail() {
                     <p className="text-sm">The deadline for this project has passed.</p>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmitBid} className="space-y-4">
+                  <form onSubmit={handleSubmitBid} className="space-y-4" noValidate>
                     <div className="space-y-2">
                       <Label htmlFor="quoted_price">Your Quoted Price (₹) *</Label>
                       <Input
@@ -392,12 +444,13 @@ export default function ContractorProjectDetail() {
                     </div>
 
                     {error && (
-                      <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
-                        {error}
+                      <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-md text-sm">
+                        <p className="font-semibold mb-1">Error:</p>
+                        <p>{error}</p>
                       </div>
                     )}
 
-                    <Button type="submit" disabled={submitting} className="w-full">
+                    <Button type="submit" disabled={submitting || !user} className="w-full">
                       {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       {submitting ? (existingBid ? 'Updating...' : 'Submitting...') : (
                         <>

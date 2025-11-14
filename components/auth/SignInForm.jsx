@@ -32,6 +32,7 @@ export default function SignInForm() {
 
       console.log('Login successful:', data.user)
       console.log('User metadata:', data.user.user_metadata)
+      console.log('Session expires at:', new Date(data.session.expires_at * 1000).toISOString())
 
       // First try to get user type from metadata
       let userType = data.user.user_metadata?.user_type
@@ -54,20 +55,20 @@ export default function SignInForm() {
         console.log('User type from profile:', userType)
       }
 
+      // Wait a moment for cookies to be set
+      await new Promise(resolve => setTimeout(resolve, 100))
+
       // Redirect based on role
       console.log('Redirecting to:', userType === 'builder' ? '/builder/dashboard' : '/contractor/dashboard')
 
-      // Use router.push for proper Next.js navigation
+      // Use window.location for a full page reload to ensure session is picked up
       if (userType === 'builder') {
-        router.push('/builder/dashboard')
+        window.location.href = '/builder/dashboard'
       } else if (userType === 'contractor') {
-        router.push('/contractor/dashboard')
+        window.location.href = '/contractor/dashboard'
       } else {
-        router.push('/')
+        window.location.href = '/'
       }
-      
-      // Force a refresh to ensure middleware picks up the session
-      router.refresh()
     } catch (error) {
       console.error('Login error:', error)
       setError(error.message || 'An error occurred during sign in')
